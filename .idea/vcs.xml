@@ -2,5 +2,9 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject/src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject/src - 복사본" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject_real/src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject_real/src - 복사본" vcs="Git" />
   </component>
 </project>

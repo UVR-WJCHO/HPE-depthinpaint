@@ -1,1 +1,4 @@
 *.pth
+*.png
+**/HPF/
+**/YOLOv3/weights/

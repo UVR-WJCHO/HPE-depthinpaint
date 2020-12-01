@@ -2,3 +2,6 @@
 *.png
 **/HPF/
 **/YOLOv3/weights/
+**/results/
+**/datasets/
+**/checkpoints/

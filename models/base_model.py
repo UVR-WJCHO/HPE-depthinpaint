@@ -42,6 +42,7 @@ class BaseModel(ABC):
         self.optimizers = []
         self.image_paths = []
         self.metric = 0  # used for learning rate policy 'plateau'
+        self.fake_B = None
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -105,6 +106,9 @@ class BaseModel(ABC):
             self.forward()
             self.compute_visuals()
 
+    def get_output(self):
+        return self.fake_B
+
     def compute_visuals(self):
         """Calculate additional output images for visdom and HTML visualization"""
         pass
@@ -154,7 +158,10 @@ class BaseModel(ABC):
                 net = getattr(self, 'net' + name)
 
                 if len(self.gpu_ids) > 0 and torch.cuda.is_available():
-                    torch.save(net.module.cpu().state_dict(), save_path)
+                    if name == 'OBJ':
+                        torch.save(net.cpu().state_dict(), save_path)
+                    else:
+                        torch.save(net.module.cpu().state_dict(), save_path)
                     net.cuda(self.gpu_ids[0])
                 else:
                     torch.save(net.cpu().state_dict(), save_path)

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
@@ -154,6 +155,10 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+
+    elif netG == 'other':
+        net = other_Generator(input_nc, output_nc)
+
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -198,6 +203,7 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
         net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer)
     elif netD == 'pixel':     # classify if each pixel is real or fake
         net = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer)
+
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -206,6 +212,94 @@ def define_D(input_nc, ndf, netD, n_layers_D=3, norm='batch', init_type='normal'
 ##############################################################################
 # Classes
 ##############################################################################
+class ResidualBlock(nn.Module):
+    def __init__(self, in_features):
+        super(ResidualBlock, self).__init__()
+
+        conv_block = [  nn.ReflectionPad2d(1),
+                        nn.Conv2d(in_features, in_features, 3),
+                        nn.InstanceNorm2d(in_features),
+                        nn.ReLU(inplace=True),
+                        nn.ReflectionPad2d(1),
+                        nn.Conv2d(in_features, in_features, 3),
+                        nn.InstanceNorm2d(in_features)  ]
+
+        self.conv_block = nn.Sequential(*conv_block)
+
+    def forward(self, x):
+        return x + self.conv_block(x)
+
+class other_Generator(nn.Module):
+    def __init__(self, input_nc, output_nc, n_residual_blocks=9):
+        super(other_Generator, self).__init__()
+
+        # Initial convolution block
+        model = [   nn.ReflectionPad2d(3),
+                    nn.Conv2d(input_nc, 64, 7),
+                    nn.InstanceNorm2d(64),
+                    nn.ReLU(inplace=True) ]
+
+        # Downsampling
+        in_features = 64
+        out_features = in_features*2
+        for _ in range(2):
+            model += [  nn.Conv2d(in_features, out_features, 3, stride=2, padding=1),
+                        nn.InstanceNorm2d(out_features),
+                        nn.ReLU(inplace=True) ]
+            in_features = out_features
+            out_features = in_features*2
+
+        model_obj = [  nn.ConvTranspose2d(256, 256, 3, stride=2, padding=1, output_padding=1),
+                        nn.InstanceNorm2d(256),
+                        nn.ReLU(inplace=True) ]
+        model_obj += [  nn.ConvTranspose2d(256, 256, 3, stride=2, padding=1, output_padding=1),
+                        nn.InstanceNorm2d(256),
+                        nn.ReLU(inplace=True) ]
+
+        # model_2 = [  nn.ConvTranspose2d(512, 256, 1, stride=1),
+        #                 nn.InstanceNorm2d(256),
+        #                 nn.ReLU(inplace=True) ]
+
+
+        in_features = in_features*2 # 512
+
+        model_2 = [ResidualBlock(in_features)]
+        # Residual blocks
+        for _ in range(n_residual_blocks-1):
+            model_2 += [ResidualBlock(in_features)]
+
+        # Upsampling
+        out_features = in_features//2
+        for _ in range(2):
+            model_2 += [  nn.ConvTranspose2d(in_features, out_features, 3, stride=2, padding=1, output_padding=1),
+                        nn.InstanceNorm2d(out_features),
+                        nn.ReLU(inplace=True) ]
+            in_features = out_features
+            out_features = in_features//2
+
+        # orig : 256 > 512, update : 256 > 256
+        # stride=2 > 1 to maintain the resolution to 256
+        model_2 += [nn.Conv2d(in_features, out_features, 3, stride=1, padding=1),
+                    nn.InstanceNorm2d(out_features),
+                    nn.ReLU(inplace=True)]
+
+        # Output layer
+        model_2 += [  nn.ReflectionPad2d(3),
+                    nn.Conv2d(64, output_nc, 7),
+                    nn.Tanh() ]
+
+        self.model = nn.Sequential(*model)
+        self.model_2 = nn.Sequential(*model_2)
+        self.model_obj = nn.Sequential(*model_obj)
+
+
+    def forward(self, x, fm):
+        x = self.model(x)
+        fm = self.model_obj(fm)
+        x = torch.cat((x, fm), dim=1)
+        return self.model_2(x)
+
+
 class GANLoss(nn.Module):
     """Define different GAN objectives.
 
@@ -455,6 +549,51 @@ class UnetGenerator(nn.Module):
         for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
             unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
         # gradually reduce the number of filters from ngf * 8 to ngf
+        self.model_skip = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
+
+
+
+        unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True, lowerside=True)
+        unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer, lowerside=True)
+        self.model_lower = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True,
+                                             norm_layer=norm_layer, lowerside=True)
+
+
+        unet_block_0 = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=None, norm_layer=norm_layer, upperside=True, innermost=True)
+        unet_block_0 = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block_0, norm_layer=norm_layer, upperside=True)
+        self.model_upper = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block_0, outermost=True, norm_layer=norm_layer, upperside=True)  # add the outermost layer
+
+
+    def forward(self, input):
+        """Standard forward"""
+        x = self.model_upper(input)   # input : 1, 4, 256, 256
+        mid = self.model_skip(x)    # x : 1, 256, 32, 32
+        output = self.model_lower(mid)
+
+        return output
+
+class UnetGenerator_backup(nn.Module):
+    """Create a Unet-based generator"""
+
+    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False):
+        """Construct a Unet generator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            output_nc (int) -- the number of channels in output images
+            num_downs (int) -- the number of downsamplings in UNet. For example, # if |num_downs| == 7,
+                                image of size 128x128 will become of size 1x1 # at the bottleneck
+            ngf (int)       -- the number of filters in the last conv layer
+            norm_layer      -- normalization layer
+
+        We construct the U-Net from the innermost layer to the outermost layer.
+        It is a recursive process.
+        """
+        super(UnetGenerator, self).__init__()
+        # construct unet structure
+        unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
+        for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
+            unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
+        # gradually reduce the number of filters from ngf * 8 to ngf
         unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
@@ -462,7 +601,9 @@ class UnetGenerator(nn.Module):
 
     def forward(self, input):
         """Standard forward"""
-        return self.model(input)
+        x = self.model(input)   # input : 1, 4, 256, 256
+
+        return x
 
 
 class UnetSkipConnectionBlock(nn.Module):
@@ -472,7 +613,7 @@ class UnetSkipConnectionBlock(nn.Module):
     """
 
     def __init__(self, outer_nc, inner_nc, input_nc=None,
-                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False):
+                 submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False, lowerside=False, upperside=False):
         """Construct a Unet submodule with skip connections.
 
         Parameters:
@@ -487,6 +628,9 @@ class UnetSkipConnectionBlock(nn.Module):
         """
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
+        self.lowerside = lowerside
+        self.upperside = upperside
+
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
         else:
@@ -499,21 +643,53 @@ class UnetSkipConnectionBlock(nn.Module):
         downnorm = norm_layer(inner_nc)
         uprelu = nn.ReLU(True)
         upnorm = norm_layer(outer_nc)
+        if upperside:
+            if innermost:
+                down = [downrelu, downconv, downnorm]
+                model = down
+            elif outermost:
+                down = [downconv]
+                model = down + [submodule]
+            else:
+                down = [downrelu, downconv, downnorm]
+                model = down + [submodule]
 
-        if outermost:
-            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
+        elif lowerside:
+            if outermost:
+                upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
+                                            kernel_size=4, stride=2,
+                                            padding=1)
+                up = [uprelu, upconv, nn.Tanh()]
+                model = [submodule] + up
+            elif innermost:
+                upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
+                                            kernel_size=4, stride=2,
+                                            padding=1, bias=use_bias)
+                up = [uprelu, upconv, upnorm]
+                model = up
+            else:
+                upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
+                                            kernel_size=4, stride=2,
+                                            padding=1, bias=use_bias)
+                up = [uprelu, upconv, upnorm]
+                model = [submodule] + up
+
+        elif outermost:
+            upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
                                         kernel_size=4, stride=2,
                                         padding=1)
             down = [downconv]
             up = [uprelu, upconv, nn.Tanh()]
             model = down + [submodule] + up
+
         elif innermost:
-            upconv = nn.ConvTranspose2d(inner_nc, outer_nc,
+            upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
                                         kernel_size=4, stride=2,
                                         padding=1, bias=use_bias)
             down = [downrelu, downconv]
             up = [uprelu, upconv, upnorm]
             model = down + up
+
         else:
             upconv = nn.ConvTranspose2d(inner_nc * 2, outer_nc,
                                         kernel_size=4, stride=2,
@@ -529,7 +705,7 @@ class UnetSkipConnectionBlock(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
-        if self.outermost:
+        if self.outermost or self.lowerside or self.upperside:
             return self.model(x)
         else:   # add skip connections
             return torch.cat([x, self.model(x)], 1)

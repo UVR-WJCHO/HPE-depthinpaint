@@ -247,10 +247,10 @@ class Darknet(nn.Module):
 
     def forward(self, x, x1=None, targets=None):
         ## 여기서 loss도 나오게
-        
         img_dim = x.shape[2]
         loss = 0
         layer_outputs, yolo_outputs = [], []
+        layer_outputs_x1 = []
         temp = 0
 
         x = Variable(x)
@@ -271,9 +271,10 @@ class Darknet(nn.Module):
                 loss += layer_loss
                 yolo_outputs.append(x)
             layer_outputs.append(x)
+            # if len(layer_outputs) == 9:
+            #     break
 
         if x1 is not None:
-            layer_outputs_x1 = []
             for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
                 if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
                     x1 = module(x1)
@@ -286,16 +287,17 @@ class Darknet(nn.Module):
                     temp += 1
                     x1, layer_loss = module[0](x1, targets, img_dim)
                 layer_outputs_x1.append(x1)
+                # if len(layer_outputs_x1) == 9:
+                #     fm_obj = layer_outputs_x1[-1]
+                #     break
 
-        #yolo_mid = to_cpu(layer_outputs[-3])
-        #yolo_mid_1 = to_cpu(layer_outputs_x1[-3])
+            fm_obj = layer_outputs_x1[-3]
+
         fm_A = layer_outputs[-3]
 
         if x1 is not None:
-            loss_ = self.criterion_L1_obj(fm_A, layer_outputs_x1[-3])
+            loss_ = self.criterion_L1_obj(fm_A, fm_obj)
 
-        # yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
-        # return yolo_mid
         return fm_A if x1 is None else (fm_A, loss_)
 
 

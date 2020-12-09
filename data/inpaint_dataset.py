@@ -7,6 +7,7 @@ import random
 import numpy as np
 import torchvision.transforms as transforms
 import cv2
+import time
 
 
 def resize_and_crop_np(img, crop_h, crop_w, top, left):
@@ -90,48 +91,17 @@ class InpaintDataset(BaseDataset):
 
             distribution : closer=smaller(0)(original) >> closer=larger(1)
         """
+        t_1 = time.time()
         # read a image given a random integer index
         idx_hand_only = 1
         idx_combined = 2
-        seed = np.random.randint(2147483647)
 
-        if index % 2 == 0:
-            # self dataset
-            idx = index % len(self.files_self_A_rgb)
-
-            A_rgb = self.transform(Image.open(self.files_self_A_rgb[idx])).float().numpy()
-            A_d = np.squeeze(self.transform(Image.open(self.files_self_A_depth[idx])).float().numpy())   # 0~255, closer = smaller
-
-            B_d = np.squeeze(self.transform(Image.open(self.files_self_B_depth[idx])).float().numpy())
-            #B_m = self.transform(Image.open(self.files_self_B_mask[idx])).float().numpy()
-
-            obj_rgb = self.transform(Image.open(self.files_self_A_m_rgb[idx])).float().numpy()
-
-            A_d[A_d==0] = 1
-            B_d[B_d==0] = 1
-            A_d = (1.0 - A_d) * 2.0 - 1.0
-            B_d = (1.0 - B_d) * 2.0 - 1.0
-
-            A_rgb = A_rgb.transpose((1, 2, 0))
-            A_rgbd = np.concatenate((A_rgb, np.expand_dims(A_d, axis=-1)), axis=-1)
-
-            # convert to tensor
-            A_rgb = transforms.ToTensor()(A_rgb)
-            item_A = transforms.ToTensor()(A_rgbd)  # A_depth
-            item_B = transforms.ToTensor()(B_d)
-
-            A_path = self.files_self_A_rgb
-            B_path = self.files_self_A_depth
-
-        else:
+        if index % 3 == 0:
             # obman dataset
             idx = index % len(self.files_A_rgb)
-            random.seed(seed)
-            ori_A_rgb = self.transform(Image.open(self.files_A_rgb[idx]))
-            random.seed(seed)
-            ori_obj_rgb = self.transform(Image.open(self.files_obj_rgb[idx]))
 
-            random.seed(seed)
+            ori_A_rgb = self.transform(Image.open(self.files_A_rgb[idx]))
+            ori_obj_rgb = self.transform(Image.open(self.files_obj_rgb[idx]))
             ori_A_depth = self.transform(Image.open(self.files_depth[idx]))
 
             AB_depth = ori_A_depth.float().numpy()  # (3, 256, 256)
@@ -162,25 +132,101 @@ class InpaintDataset(BaseDataset):
             A_rgb = ori_A_rgb.float().numpy()
             ori_obj_rgb = ori_obj_rgb.float().numpy()
 
+            # mask with depth data
+            d_idx = A_depth == -1
+            A_rgb[0, d_idx] = 0
+            A_rgb[1, d_idx] = 0
+            A_rgb[2, d_idx] = 0
+            ori_obj_rgb[0, d_idx] = 0
+            ori_obj_rgb[1, d_idx] = 0
+            ori_obj_rgb[2, d_idx] = 0
+
             A_rgb = resize_and_crop_np(A_rgb, height, width, top, left)
             ori_obj_rgb = resize_and_crop_np(ori_obj_rgb, height, width, top, left)
 
             A_depth = A_depth[int(top):int(top) + height, int(left):int(left) + width]
             A_depth = cv2.resize(A_depth, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
 
-            A_rgbd = np.concatenate((A_rgb, np.expand_dims(A_depth, axis=-1)), axis=-1)
-
             B_depth = B_depth[int(top):int(top) + height, int(left):int(left) + width]
             B_depth = cv2.resize(B_depth, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
 
+            seed = np.random.randint(4)
+            if seed == 0:
+                A_rgb = np.flip(A_rgb, (0, 1))
+                A_depth = np.flip(A_depth, (0, 1))
+                B_depth = np.flip(B_depth, (0, 1))
+                ori_obj_rgb = np.flip(ori_obj_rgb, (0, 1))
+            elif seed == 1:
+                A_rgb = np.flip(A_rgb, 0)
+                A_depth = np.flip(A_depth, 0)
+                B_depth = np.flip(B_depth, 0)
+                ori_obj_rgb = np.flip(ori_obj_rgb, 0)
+            elif seed == 2:
+                A_rgb = np.flip(A_rgb, 1)
+                A_depth = np.flip(A_depth, 1)
+                B_depth = np.flip(B_depth, 1)
+                ori_obj_rgb = np.flip(ori_obj_rgb, 1)
+
+            A_rgbd = np.concatenate((A_rgb, np.expand_dims(A_depth, axis=-1)), axis=-1)
+
             # convert to tensor
-            A_rgb = transforms.ToTensor()(A_rgb)
-            obj_rgb = transforms.ToTensor()(ori_obj_rgb)
-            item_A = transforms.ToTensor()(A_rgbd)  # A_depth
-            item_B = transforms.ToTensor()(B_depth)
+            A_rgb = transforms.ToTensor()(A_rgb.copy())
+            obj_rgb = transforms.ToTensor()(ori_obj_rgb.copy())
+            item_A = transforms.ToTensor()(A_rgbd.copy())  # A_depth
+            item_B = transforms.ToTensor()(B_depth.copy())
 
             A_path = self.files_A_rgb
             B_path = self.files_depth
+
+        else:
+            # self dataset, rgb is already masked by depth
+            idx = index % len(self.files_self_A_rgb)
+
+            A_rgb = self.transform(Image.open(self.files_self_A_rgb[idx])).float().numpy()
+            A_d = np.squeeze(self.transform(Image.open(self.files_self_A_depth[idx])).float().numpy())   # 0~255, closer = smaller
+            B_d = np.squeeze(self.transform(Image.open(self.files_self_B_depth[idx])).float().numpy())
+
+            #B_m = self.transform(Image.open(self.files_self_B_mask[idx])).float().numpy()
+
+            obj_rgb = self.transform(Image.open(self.files_self_A_m_rgb[idx])).float().numpy()
+
+            A_d[A_d==0] = 1
+            B_d[B_d==0] = 1
+            A_d = (1.0 - A_d) * 2.0 - 1.0
+            B_d = (1.0 - B_d) * 2.0 - 1.0
+
+            A_rgb = A_rgb.transpose((1, 2, 0))
+            obj_rgb = obj_rgb.transpose((1, 2, 0))
+
+            seed = np.random.randint(4)
+            if seed == 0:
+                A_rgb = np.flip(A_rgb, (0, 1))
+                A_d = np.flip(A_d, (0, 1))
+                B_d = np.flip(B_d, (0, 1))
+                obj_rgb = np.flip(obj_rgb, (0, 1))
+            elif seed == 1:
+                A_rgb = np.flip(A_rgb, 0)
+                A_d = np.flip(A_d, 0)
+                B_d = np.flip(B_d, 0)
+                obj_rgb = np.flip(obj_rgb, 0)
+            elif seed == 2:
+                A_rgb = np.flip(A_rgb, 1)
+                A_d = np.flip(A_d, 1)
+                B_d = np.flip(B_d, 1)
+                obj_rgb = np.flip(obj_rgb, 1)
+
+            A_rgbd = np.concatenate((A_rgb, np.expand_dims(A_d, axis=-1)), axis=-1)
+
+            # convert to tensor
+            A_rgb = transforms.ToTensor()(A_rgb.copy())
+            obj_rgb = transforms.ToTensor()(obj_rgb.copy())
+            item_A = transforms.ToTensor()(A_rgbd.copy())  # A_depth
+            item_B = transforms.ToTensor()(B_d.copy())
+
+            A_path = self.files_self_A_rgb
+            B_path = self.files_self_A_depth
+
+        print("t in data loader : ", time.time() - t_1)
 
         return {'A': item_A, 'B': item_B, 'rgb_both': A_rgb, 'rgb_obj': obj_rgb, 'A_paths': A_path, 'B_paths': B_path}
 

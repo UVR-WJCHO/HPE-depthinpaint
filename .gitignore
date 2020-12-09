@@ -1,6 +1,7 @@
 *.pth
 *.png
 **/HPF/
+**/HPF_real/
 **/YOLOv3/weights/
 **/results/
 **/datasets/

@@ -1,111 +1,62 @@
 from __future__ import division
 
 import os
-import sys
-import argparse
-import time
+from options.test_options import TestOptions
+from data import create_dataset
+from models import create_model
+import torch
 
 import cv2
 import numpy as np
+#from HPF_module import HPF_module
 
-from DI_module import *
-
-
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-dtype = torch.float
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', type=str, default='val', help='test')
-    parser.add_argument('--name', type=str, default='_rgbd_crop', help='checkpoint name')
-    parser.add_argument('--batch', type=int, default=1, help='size of the batches')
-    opt = parser.parse_args()
-    print(opt)
+    opt = TestOptions().parse()  # get test options
+    # hard-code some parameters for test
+    opt.num_threads = 0   # test code only supports num_threads = 1
+    opt.batch_size = 1    # test code only supports batch_size = 1
+    opt.serial_batches = True  # disable data shuffling; comment this line if results on randomly chosen images are needed.
+    opt.no_flip = True    # no flip; comment this line if results on flipped images are needed.
+    opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
+    opt.gpu_ids = [0]      # use [] for CPU'
+    device = torch.device('cuda:{}'.format(opt.gpu_ids[0])) if opt.gpu_ids else torch.device('cpu')
 
-    dataset_type = 'obman'     ## 'obman', 'camera', 'self_image'
+    opt.name = 'trial_6_yolo' # network name
 
-    flag_visualize = False
-    flag_tracker = False
+    ### dataset list ###
+    # 'inpaint' : obman & self-dataset
+    # 'dexterHO' : dexterHO
+    opt.dataset_mode = 'dexterHO'
 
-    if dataset_type == 'obman':
-        dataloader_name = ImageDataset_obman
-    elif dataset_type == 'self_image':
-        dataloader_name = ImageDataset_self
+    dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
+    model = create_model(opt)      # create a model given opt.model and other options
+    model.setup(opt)               # regular setup: load and print networks; create schedulers
 
-    DI = DepthInpaint_module(cuda=True, target=opt.name, mode=opt.mode, batchSize=opt.batch, dataset=dataset_type)
-    """
-    if opt.mode == 'train':
-        lr = 0.0001
-        datasize = 20000
-        set_viz = False
-        set_OFE_eval = False
-        DI._set_trainoption(lr, datasize, set_viz, set_OFE_eval)
+    for i, data in enumerate(dataset):
+        im_RGBD = data['A'].to(device)
+        im_RGBD = im_RGBD.type(torch.cuda.FloatTensor)
 
-        DI._set_memory()
-        DI._set_module()
-        DI._set_optimizer()
+        with torch.no_grad():
+            output = model.forward_test(im_RGBD)
 
-        if opt.load: DI._ckpfile_load()
-        else: DI._ckpfile_init()
+        im_RGBD = np.squeeze(im_RGBD.cpu().numpy())
+        output = np.squeeze(output.cpu().numpy())
 
-        DI._set_lossandlr()
+        im_RGBD = im_RGBD.transpose((1, 2, 0))
 
-        dataloader = DI._set_dataloader(dataloader_name)
-        logger = DI._set_logger(dataloader)
+        im_RGB = np.uint8(im_RGBD[:, :, :-1] * 255)
+        im_D = im_RGBD[:, :, -1]
+        cv2.imshow("input rgb", im_RGB)
+        cv2.imshow("input depth", im_D)
+        cv2.imshow("output d", output)
+        cv2.waitKey(1)
 
-        DI._create_output_pth()
-        for epoch in range(DI.init_epoch, DI.n_epoch):
-            DI._save_ckp(epoch)
-            for i, batch in enumerate(dataloader):
-                DI.train(i, batch)
-
-            # Update learning rates
-            DI.lr_scheduler_G.step()
-            DI.lr_scheduler_D_B.step()
-
-        sys.stdout.write('\n End training')
-    """
-    if opt.mode == 'test' or opt.mode == 'val':
-        DI._set_memory()
-        DI._set_module()
-        DI._ckpfile_load()
-        dataloader = DI._set_dataloader(dataloader_name)
-        DI._create_output_pth()
-
-        for i, batch in enumerate(dataloader):
-            #### extract input ###
-            A_tensor = batch['A']  # RGBD
-            A_rgb_tensor = batch['rgb_A']
-
-            ### run the depth inpaint module ###
-            B_fake = DI.test(i, batch, A_tensor, A_rgb_tensor)
-
-            #### visualize ###
-            if flag_visualize:
-                A = A_tensor.permute(0, 2, 3, 1)
-                A = np.squeeze(A.cpu().float().numpy())
-                A_rgb = A[:, :, :-1]
-                A_rgb_norm = A_rgb * 255.0
-                A_rgb_norm /= A_rgb_norm.max()
-                cv2.imshow('A_rgb', A_rgb_norm)
-
-                A_d = A[:, :, -1]
-                A_d_norm = (A_d + 1.0) / 2.0
-                A_d_norm /= A_d_norm.max()
-                A_d_vis = np.uint8(np.squeeze(A_d_norm) * 255)
-                A_d_vis = cv2.applyColorMap(A_d_vis, cv2.COLORMAP_JET)
-                cv2.imshow('A_d', A_d_vis)
-
-                B_fake = (B_fake + 1.0) / 2.0
-                B_fake_vis = np.uint8(np.squeeze(B_fake) * 255)
-                B_fake_vis = cv2.applyColorMap(B_fake_vis, cv2.COLORMAP_JET)
-                cv2.imshow('fake_d', B_fake_vis)
-                cv2.waitKey(0)
-
-            #if flag_tracker:
+        output = np.uint8((output + 1) * 255 / 2)
+        name_rgb = "results/" + opt.name + "/test_DexterHO/rgb/" + str(i) + ".png"
+        name_output = "results/" + opt.name + "/test_DexterHO/output/" + str(i) + ".png"
+        cv2.imwrite(name_rgb, im_RGB)
+        cv2.imwrite(name_output, output)
 
 
 
-            sys.stdout.write('\rGenerated images %04d of %04d' % (i + 1, len(dataloader)))
-
-        sys.stdout.write('\n End testing')

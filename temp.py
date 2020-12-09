@@ -1,83 +1,123 @@
-import torch
 from PIL import Image
-import numpy as np
 import glob
-import random
-import os
-import argparse
+import numpy as np
 import torchvision.transforms as transforms
+import cv2
 
-class ImageDataset():
-    def __init__(self, root, datasize=None, transforms_=None, unaligned=False, mode='train'):
-        self.transform = transforms.Compose(transforms_)
-        self.normalize = transforms.Normalize((0.5,), (0.5,))
-        self.unaligned = unaligned
 
-        self.files_A_rgb = sorted(glob.glob(os.path.join(root, '%s/' % mode) + 'rgb' + '/*.*'))
-        self.files_B_rgb = sorted(glob.glob(os.path.join(root, '%s/' % mode) + 'rgb_hand' + '/*.*'))
-        self.files_depth = sorted(glob.glob(os.path.join(root, '%s/' % mode) + 'depth' + '/*.*'))
+def resize_and_crop_np(img, crop_h, crop_w, top, left):
+    # for numpy array from tensor, C * W * H
+    img = img[:, int(top):int(top) + crop_h, int(left):int(left) + crop_w]
+    img = img.transpose((1, 2, 0))
+    return cv2.resize(img, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
 
-        if datasize is None:
-            datasize = int(len(self.files_A_rgb))
-        self.files_A_rgb = self.files_A_rgb[:datasize]
-        self.files_B_rgb = self.files_B_rgb[:datasize]
-        self.files_depth = self.files_depth[:datasize]
 
-        npfile = np.zeros((6, 256, 256, datasize))
+class InpaintDataset():
+    def __init__(self, phase, view):
+        self.phase = phase
+        self.view = view
+        transform_list = [ transforms.ToTensor() ]
+        self.transform = transforms.Compose(transform_list)
 
-        for index in range(datasize):
-            if index % 1000 == 0:
-                print("idx : ", index)
-            seed = np.random.randint(2147483647)
+        dir_self = "./datasets/self_2020/wOBJ/" + str(phase) + "/" + str(view)
+        self.files_self_A_rgb = sorted(glob.glob(dir_self + '/A_color' + '/*.*'))
+        self.files_self_A_depth = sorted(glob.glob(dir_self + '/A_depth' + '/*.*'))
+        self.files_self_B_depth = sorted(glob.glob(dir_self + '/B_depth' + '/*.*'))
+        self.files_self_B_mask = sorted(glob.glob(dir_self + '/B_mask' + '/*.*'))
+        self.files_self_A_m_rgb = sorted(glob.glob(dir_self + '/A_masked_color' + '/*.*'))
 
-            # from rgb data, extract featuremap(fm)
-            random.seed(seed)
-            ori_A_rgb = self.transform(Image.open(self.files_A_rgb[index % len(self.files_A_rgb)]))
-            A_rgb = np.squeeze(ori_A_rgb.float().numpy())
+        datasize = int(len(self.files_self_A_rgb))
+        print("phase, datasize ; ", phase, datasize)
+        self.files_self_A_rgb = self.files_self_A_rgb[:datasize]
+        self.files_self_A_depth = self.files_self_A_depth[:datasize]
+        self.files_self_B_depth = self.files_self_B_depth[:datasize]
+        self.files_self_B_mask = self.files_self_B_mask[:datasize]
+        self.files_self_A_m_rgb = self.files_self_A_m_rgb[:datasize]
 
-            random.seed(seed)
-            ori_A_depth = self.normalize(self.transform(Image.open(self.files_depth[index % len(self.files_A_rgb)])))
-            AB_depth = np.squeeze(ori_A_depth.float().numpy())  # (3, 256, 256)
 
-            npfile[:3, :, :, index] = A_rgb
-            npfile[3:, :, :, index] = AB_depth
+    def __getitem__(self, index):
+        # self dataset, rgb is already masked by depth
+        idx = index % len(self.files_self_A_rgb)
 
-        np.save('RGBD_10k.npy', npfile)
+        A_rgb = self.transform(Image.open(self.files_self_A_rgb[idx])).float().numpy()
+        A_d = np.squeeze(self.transform(Image.open(self.files_self_A_depth[idx])).float().numpy())   # 0~255, closer = smaller
+        B_d = np.squeeze(self.transform(Image.open(self.files_self_B_depth[idx])).float().numpy())
+        obj_rgb = self.transform(Image.open(self.files_self_A_m_rgb[idx])).float().numpy()
+
+        A_rgb = np.uint8(A_rgb * 255.0)
+        obj_rgb = np.uint8(obj_rgb * 255.0)
+
+        A_d = A_d * 255.0
+        B_d = B_d * 255.0
+
+        A_rgb = A_rgb.transpose((1, 2, 0))
+        obj_rgb = obj_rgb.transpose((1, 2, 0))
+
+        seed = np.random.randint(4)
+        if seed == 0:
+            A_rgb = np.flip(A_rgb, (0, 1))
+            A_d = np.flip(A_d, (0, 1))
+            B_d = np.flip(B_d, (0, 1))
+            obj_rgb = np.flip(obj_rgb, (0, 1))
+        elif seed == 1:
+            A_rgb = np.flip(A_rgb, 0)
+            A_d = np.flip(A_d, 0)
+            B_d = np.flip(B_d, 0)
+            obj_rgb = np.flip(obj_rgb, 0)
+        elif seed == 2:
+            A_rgb = np.flip(A_rgb, 1)
+            A_d = np.flip(A_d, 1)
+            B_d = np.flip(B_d, 1)
+            obj_rgb = np.flip(obj_rgb, 1)
+
+        A_rgbd = np.concatenate((A_rgb, np.expand_dims(A_d, axis=-1)), axis=-1)
+
+        A_rgbd_name = "./datasets/self_2020/wOBJ_processed/" + str(self.phase) + "/A_rgbd/" + str(self.view) + "_" + str(index) + ".png"
+        #A_rgb_name = "./datasets/self_2020/wOBJ_processed/" + str(self.phase) + "/A_rgb/" + str(index) + ".png"
+        obj_rgb_name = "./datasets/self_2020/wOBJ_processed/" + str(self.phase) + "/obj_rgb/" + str(self.view) + "_" + str(index) + ".png"
+        #A_d_name = "./datasets/self_2020/wOBJ_processed/" + str(self.phase) + "/A_d/" + str(index) + ".png"
+        B_d_name = "./datasets/self_2020/wOBJ_processed/" + str(self.phase) + "/B_d/" + str(self.view) + "_" + str(index) + ".png"
+
+        cv2.imwrite(A_rgbd_name, A_rgbd)
+        #cv2.imwrite(A_rgb_name, A_rgb)
+        cv2.imwrite(obj_rgb_name, obj_rgb)
+        #cv2.imwrite(A_d_name, A_d)
+        cv2.imwrite(B_d_name, B_d)
+
+
+        return None
+
+    def __len__(self):
+        """Return the total number of images in the dataset."""
+        return len(self.files_self_A_rgb)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--n_epochs', type=int, default=20, help='number of epochs of training')  # 200
-    parser.add_argument('--decay_epoch', type=int, default=10,
-                        help='epoch to start linearly decaying the learning rate to 0')  # 100
-    parser.add_argument('--batchSize', type=int, default=2, help='size of the batches')
-    parser.add_argument('--dataroot', type=str, default='datasets/HO2H/', help='root directory of the dataset')
-    parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 
-    parser.add_argument('--size', type=int, default=256, help='size of the data crop (squared assumed)')
-    parser.add_argument('--input_nc', type=int, default=1, help='number of channels of input data')
-    parser.add_argument('--output_nc', type=int, default=1, help='number of channels of output data')
+    dataset = InpaintDataset('train', 'exo')
+    for i, data in enumerate(dataset):
+        if i % 100 == 0:
+            print("i train exo : ", i)
+        if i == len(dataset):
+            break
 
-    parser.add_argument('--cuda', type=bool, default=True, help='use GPU computation')
-    parser.add_argument('--n_cpu', type=int, default=8, help='number of cpu threads to use during batch generation')
+    dataset = InpaintDataset('train', 'ego')
+    for i, data in enumerate(dataset):
+        if i % 100 == 0:
+            print("i train ego : ", i)
+        if i == len(dataset):
+            break
 
-    parser.add_argument('--load', action='store_true', help='load from checkpoint')
-    parser.add_argument('--datasize', type=int, default=10000, help='set the size of dataset(total 141.5k for obman)')
+    dataset = InpaintDataset('test', 'exo')
+    for i, data in enumerate(dataset):
+        if i % 100 == 0:
+            print("i test exo : ", i)
+        if i == len(dataset):
+            break
 
-    # About Yolov3
-    parser.add_argument("--model_def", type=str, default="YOLOv3/config/yolov3-tiny.cfg",
-                        help="path to model definition file")
-    parser.add_argument("--weights_path", type=str, default="YOLOv3/weights/yolov3-tiny.weights",
-                        help="path to weights file")
-
-    opt = parser.parse_args()
-
-    transforms_ = [transforms.Resize(int(opt.size * 1.12), Image.BICUBIC),
-                   transforms.RandomCrop(opt.size),
-                   transforms.RandomHorizontalFlip(),
-                   transforms.ToTensor()]
-
-    ImageDataset(opt.dataroot, datasize=opt.datasize, transforms_=transforms_, unaligned=True)
-    print("done")
-
-
+    dataset = InpaintDataset('test', 'ego')
+    for i, data in enumerate(dataset):
+        if i % 100 == 0:
+            print("i test ego : ", i)
+        if i == len(dataset):
+            break

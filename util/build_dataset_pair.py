@@ -180,22 +180,29 @@ if __name__ == '__main__':
         namelist_obj_color = []
         namelist_obj_depth = []
 
-        for filename in Path(os.path.join('../datasets/self_2020/trial_0')).rglob('c2d/*.png'):
-            namelist_hand_color.append(filename)
-        for filename in Path(os.path.join('../datasets/self_2020/trial_0')).rglob('depth/*.png'):
-            namelist_hand_depth.append(filename)
+        view_type = "exo"
 
+        if view_type == "ego":
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/ego')).rglob('c2d/*.png'):
+                namelist_hand_color.append(filename)
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/ego')).rglob('depth/*.png'):
+                namelist_hand_depth.append(filename)
+        elif view_type == "exo":
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('c2d/*.png'):
+                namelist_hand_color.append(filename)
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('depth/*.png'):
+                namelist_hand_depth.append(filename)
+
+
+
+        for filename in Path(os.path.join('../../Object-Renderer-pyrender/examples/images/box')).rglob('color/*.png'):
+            namelist_obj_color.append(filename)
+        for filename in Path(os.path.join('../../Object-Renderer-pyrender/examples/images/box')).rglob('depth/*.png'):
+            namelist_obj_depth.append(filename)
         for filename in Path(os.path.join('../../Object-Renderer-pyrender/examples/images/banana')).rglob('color/*.png'):
             namelist_obj_color.append(filename)
         for filename in Path(os.path.join('../../Object-Renderer-pyrender/examples/images/banana')).rglob('depth/*.png'):
             namelist_obj_depth.append(filename)
-
-        # for filename in Path(os.path.join('../Object-Renderer-pyrender/examples/images/bottle')).rglob(
-        #         'color/*.png'):
-        #     namelist_obj_color.append(filename)
-        # for filename in Path(os.path.join('../Object-Renderer-pyrender/examples/images/bottle')).rglob(
-        #         'depth/*.png'):
-        #     namelist_obj_depth.append(filename)
 
         tmp = len(namelist_hand_depth)
         len_obj = len(namelist_obj_depth)
@@ -203,17 +210,17 @@ if __name__ == '__main__':
 
         # load texture data
         texture_list = []
-        for filename in Path(os.path.join('util/texture')).rglob('*.png'):
+        for filename in Path(os.path.join('texture')).rglob('*.png'):
             texture_list.append(filename)
-        for filename in Path(os.path.join('util/texture')).rglob('*.jpg'):
+        for filename in Path(os.path.join('texture')).rglob('*.jpg'):
             texture_list.append(filename)
         len_texture = len(texture_list)
 
         # main process
         key_flag = True
 
-        pair_A_RGBD = np.zeros((len_dataset, 256, 256, 4))
-        pair_B_DM = np.zeros((len_dataset, 256, 256, 2))
+        #pair_A_RGBD = np.zeros((len_dataset, 256, 256, 4))
+        #pair_B_DM = np.zeros((len_dataset, 256, 256, 2))
 
         save_cnt = 0
         itr = 0
@@ -221,6 +228,9 @@ if __name__ == '__main__':
         p_total = np.random.permutation(len_dataset)
         test_len = int(len_dataset / 10)
         train_len = len_dataset - test_len
+
+        p_obj = np.random.permutation(len_obj)
+        p_tex = np.random.permutation(len_texture)
 
         for i in range(len_dataset):
             if i == len_dataset - 1:
@@ -238,16 +248,25 @@ if __name__ == '__main__':
             hand_d = np.array(Image.open(str(namelist_hand_depth[idx % tmp])))
 
 
-            idx_obj = np.random.randint(0, len_obj)
-            idx_tex = np.random.randint(0, len_texture)
+            idx_obj = p_obj[idx % len_obj]
+            idx_tex = p_tex[idx % len_texture]
             obj_c = np.array(Image.open(str(namelist_obj_color[idx_obj])))
             obj_d = np.array(Image.open(str(namelist_obj_depth[idx_obj])))
             tex = np.array(Image.open(str(texture_list[idx_tex])))
             tex = cv2.resize(tex, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
 
-            hand_c = hand_c[:, :, :-1]
-            hand_d = hand_d[:, :, 1]
-            hand_d[hand_d==1] = 0
+            if len(hand_c[0, 0, :]) == 4:
+                hand_c = hand_c[:, :, :-1]
+                hand_d = hand_d[:, :, 1]
+                hand_d[hand_d==1] = 0
+
+
+            if view_type == "exo":
+                hand_d[hand_d>600] = 0
+                hand_c[hand_d == 0, :] = [0, 0, 0]
+
+                hand_d = hand_d[40:-40, 40:-40]
+                hand_c = hand_c[40:-40, 40:-40, :]
 
 
             hand_min_d = np.min(np.nonzero(hand_d))
@@ -320,16 +339,16 @@ if __name__ == '__main__':
                         both_c[k, j, 0] = hand_c[k, j, 0]
                         both_c[k, j, 1] = hand_c[k, j, 1]
                         both_c[k, j, 2] = hand_c[k, j, 2]
-
-            # cv2.imshow("hand_c", hand_c)
-            # cv2.imshow("hand_d", np.uint8(hand_d))
-            # cv2.imshow("obj_c", obj_c)
-            # cv2.imshow("obj_d", np.uint8(obj_d))
-            # cv2.imshow("both_c", both_c)
-            # cv2.imshow("both_d", both_d)
-            # cv2.imshow("mask_obj", mask_obj)
-            # cv2.waitKey(0)
-
+            """
+            cv2.imshow("hand_c", hand_c)
+            cv2.imshow("hand_d", np.uint8(hand_d))
+            cv2.imshow("obj_c", obj_c)
+            cv2.imshow("obj_d", np.uint8(obj_d))
+            cv2.imshow("both_c", both_c)
+            cv2.imshow("both_d", both_d)
+            cv2.imshow("mask_obj", mask_obj)
+            cv2.waitKey(0)
+            """
             masked_c = both_c.copy()
             masked_c[mask_obj == 0] = 0
             # cv2.imshow("masked_c", masked_c)
@@ -338,20 +357,20 @@ if __name__ == '__main__':
             save as image
             """
             if i < train_len:
-                name_base = "../datasets/self_2020/trial_0/wOBJ/train/"
+                name_base = "../datasets/self_2020/wOBJ/train/" + view_type
             else:
-                name_base = "../datasets/self_2020/trial_0/wOBJ/test/"
+                name_base = "../datasets/self_2020/wOBJ/test/" + view_type
 
-            name_Ac = name_base + "A_color/" + str(save_cnt) + ".png"
+            name_Ac = name_base + "/A_color/" + str(save_cnt) + ".png"
             cv2.imwrite(name_Ac, both_c)
-            name_Ad = name_base + "A_depth/" + str(save_cnt) + ".png"
+            name_Ad = name_base + "/A_depth/" + str(save_cnt) + ".png"
             cv2.imwrite(name_Ad, both_d)
-            name_Bd = name_base + "B_depth/" + str(save_cnt) + ".png"
+            name_Bd = name_base + "/B_depth/" + str(save_cnt) + ".png"
             cv2.imwrite(name_Bd, hand_d)
-            name_Bm = name_base + "B_mask/" + str(save_cnt) + ".png"
+            name_Bm = name_base + "/B_mask/" + str(save_cnt) + ".png"
             cv2.imwrite(name_Bm, mask_obj)
 
-            name_Bmc = name_base + "A_masked_color/" + str(save_cnt) + ".png"
+            name_Bmc = name_base + "/A_masked_color/" + str(save_cnt) + ".png"
             cv2.imwrite(name_Bmc, masked_c)
 
             # A = np.concatenate((both_c, np.expand_dims(both_d, axis=-1)), axis=-1)
@@ -363,7 +382,9 @@ if __name__ == '__main__':
             save_cnt += 1
             key = cv2.waitKey(1)
 
-            print("itr in total --- ", (i, len_dataset, p_total[i]))
+            if i % 100 == 0:
+                msg = view_type + " itr in total --- "
+                print(msg, (i, len_dataset, p_total[i]))
 
             if key == ord('q') or key == 27:
                 break

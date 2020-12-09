@@ -37,37 +37,35 @@ class DexterHOdataset(BaseDataset):
 
 
     def __getitem__(self, index):
-        # rgb : -1 ~ 1
-        # depth : closer ~ larger, -1 ~ 1
+        # [target]
+        # rgb : 0 ~ 1
+        # depth : closer ~ smaller, 0 ~ 1
         # to 256, 256
 
         idx = index % len(self.files_A_rgb)
 
-        A_rgb = self.transform(Image.open(self.files_A_rgb[idx]))
-        A_d = self.transform(Image.open(self.files_depth[idx]))
+        A_rgb = cv2.imread(self.files_A_rgb[idx])   # 240, 320, 3
+        A_d = cv2.imread(self.files_depth[idx], cv2.IMREAD_UNCHANGED)
 
-        A_rgb_np = A_rgb.float().numpy()    # (3, 240, 320)
-        A_d_np = np.squeeze(A_d.float().numpy())
 
         ## check value range
         # rgb : 0 ~ 1
         # depth :
         #   background : 32001
         #   closer = smaller, 1600 ~ 270
-        #   masking with c2d image(A_rgb_np)
 
-        #mask_idx = A_rgb_np[0, :, :] == 0 and A_rgb_np[1, :, :] == 0 and A_rgb_np[2, :, :] == 0
-        #A_d_np[mask_idx] = 0.0
 
-        A_d_np[A_d_np == 32001] = 0.0
-        A_d_np /= np.max(A_d_np)
+        A_d[A_d == 32001] = 0.0
+        A_d[A_d > 600] = 0.0
+        A_d = A_d / np.max(A_d)
 
-        cv2.imshow("c", np.uint8(A_rgb_np * 255))
-        cv2.imshow("d", np.uint8(A_d_np * 255))
-        cv2.waitKey(0)
+        A_rgb = A_rgb[40:-40, 80:-80, :]
+        A_d = A_d[40:-40, 80:-80]
 
-        A_d_np[A_d_np == 0] = 1.0
-        A_d_np = (1.0 - A_d_np) * 2.0 - 1.0
+        A_rgb = A_rgb / 255.0
+
+        A_rgb = cv2.resize(A_rgb, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
+        A_d = cv2.resize(A_d, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
 
         ## find ROI and crop
         """
@@ -102,15 +100,14 @@ class DexterHOdataset(BaseDataset):
                """
 
         ## re-order channels and create input
-        A_rgb_np = A_rgb_np.transpose((1, 2, 0))
-        A_rgbd = np.concatenate((A_rgb_np, np.expand_dims(A_d_np, axis=-1)), axis=-1)
-
+        A_rgbd = np.concatenate((A_rgb, np.expand_dims(A_d, axis=-1)), axis=-1)
 
         # convert to tensor
-        A_rgb = transforms.ToTensor()(A_rgb)
         item_A = transforms.ToTensor()(A_rgbd)  # A_depth
 
-        return {'A': item_A, 'rgb_both': A_rgb}
+        A_path = self.files_A_rgb
+
+        return {'A': item_A, 'A_paths': A_path}
 
     def __len__(self):
         """Return the total number of images in the dataset."""

@@ -6,5 +6,9 @@
     <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject/src - 복사본" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject_real/src" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/HPF/c++/GYhandtrackingProject_real/src - 복사본" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/c++/GYhandtrackingProject/src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/c++/GYhandtrackingProject/src - 복사본" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/temp/c++/GYhandtrackingProject/src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/temp/c++/GYhandtrackingProject/src - 복사본" vcs="Git" />
   </component>
 </project>

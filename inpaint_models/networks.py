@@ -158,8 +158,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
 
     elif netG == 'unet_256_update':
         net = UnetGenerator_update(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
-    elif netG == 'other':
-        net = other_Generator(input_nc, output_nc)
+
 
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
@@ -231,7 +230,7 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         return x + self.conv_block(x)
 
-
+"""
 class other_Generator(nn.Module):
     def __init__(self, input_nc, output_nc, n_residual_blocks=9):
         super(other_Generator, self).__init__()
@@ -301,7 +300,7 @@ class other_Generator(nn.Module):
         fm = self.model_obj(fm)
         x = torch.cat((x, fm), dim=1)
         return self.model_2(x)
-
+"""
 
 class GANLoss(nn.Module):
     """Define different GAN objectives.

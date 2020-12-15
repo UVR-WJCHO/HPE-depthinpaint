@@ -1,0 +1,81 @@
+updateDelay_enable= false
+test_sync= false
+recordPath= D:/Research/UVR_handTracker/c++/GYhandtrackingProject/saveData/trackingData/
+gyroSamplingMethod= diagonal
+modelType= palmHand
+handTrackingMethod= HMF
+calibrationType= noScale
+calibrationSolver= PF
+
+fx= 238.95
+fy= 238.95
+cx= 160
+cy= 120
+width= 320
+height= 240
+
+
+width_tile= 64
+height_tile= 64
+
+max_generation= 30
+particle_numx= 8
+particle_numy= 8
+render_near= 0.01
+render_far= 500
+swarm_num= 2
+
+sx_palm= 8
+sy_palm= 8
+sz_palm= 8
+sx_finger= 1
+sy_finger= 1
+sz_finger= 1
+
+tx= -27
+ty= 33
+tz= 360
+rx= -52
+ry= 6
+rz= 180
+f00= 20
+f01= 22
+f02= 0
+f03= 0
+f10= 0
+f11= -12
+f12= 0
+f13= 0 
+f20= 0
+f21= -2.5
+f22= 0
+f23= 0
+f30= 0
+f31= 2.47
+f32= 0
+f33= 0
+f40= 0
+f41= 17
+f42= 0
+f43= 0
+
+show_hand= false
+show_wband= false
+show_box= false
+fit_wrist_separately= true
+downsampling_factor= 1
+depth_range= 150
+wrist_band_length= 10
+crop_radius= 150
+hsv_min0= 94
+hsv_min1= 111
+hsv_min2= 37
+hsv_max0= 120
+hsv_max1= 255
+hsv_max2= 255
+
+
+
+
+
+

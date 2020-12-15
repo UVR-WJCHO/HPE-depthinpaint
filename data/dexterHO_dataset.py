@@ -21,7 +21,9 @@ class DexterHOdataset(BaseDataset):
     def __init__(self, opt):
         BaseDataset.__init__(self, opt)
 
-        self.dir_AB = 'D:/Research_2020/HPF_handtracker/dataset/DexterHO/Occlusion'
+        seq = 'Occlusion'
+
+        self.dir_AB = 'D:/Research_2020/HPF_handtracker/dataset/DexterHO/' + str(seq)
 
         self.files_A_rgb = sorted(glob.glob(self.dir_AB + '/c2d' + '/*.*'))
         self.files_depth = sorted(glob.glob(self.dir_AB + '/depth' + '/*.*'))
@@ -58,6 +60,7 @@ class DexterHOdataset(BaseDataset):
         A_d[A_d == 32001] = 0.0
         A_d[A_d > 600] = 0.0
         A_d = A_d / np.max(A_d)
+        A_d = A_d * 2.0 - 1.0
 
         A_rgb = A_rgb[40:-40, 80:-80, :]
         A_d = A_d[40:-40, 80:-80]

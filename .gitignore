@@ -1,5 +1,6 @@
 *.pth
 *.png
+**/model/
 **/HPF/
 **/HPF_real/
 **/YOLOv3/weights/
@@ -7,3 +8,7 @@
 **/datasets/
 **/checkpoints/
 **/util/texture/
+train.py
+temp.py
+HPF_module.py
+test_wHPF.py

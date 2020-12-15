@@ -170,9 +170,52 @@ if __name__ == '__main__':
 
     global img
     global target
-    mode = 3
+    mode = 4
 
-    if mode == 3:
+    if mode == 5:  # to change color order of exo dataset
+        print("mode : ", mode)
+        namelist_hand_color = []
+        namelist_hand_depth = []
+
+        namelist_obj_color = []
+        namelist_obj_depth = []
+
+        view_type = "exo"
+
+        if view_type == "exo":
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('c2d_1/*.png'):
+                namelist_hand_color.append(filename)
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('depth/*.png'):
+                namelist_hand_depth.append(filename)
+
+        save_cnt = 0
+        itr = 0
+        len_dataset = len(namelist_hand_color)
+        for i in range(len_dataset):
+            hand_c = np.array(Image.open(str(namelist_hand_color[i])))
+            hand_d = np.array(Image.open(str(namelist_hand_depth[i])))
+
+            name_base = "../datasets/self_2020/woOBJ/" + view_type
+            name = str(namelist_hand_color[i])
+            cv2.imwrite(name, hand_c)
+
+            # A = np.concatenate((both_c, np.expand_dims(both_d, axis=-1)), axis=-1)
+            # B = np.concatenate((np.expand_dims(hand_d, axis=-1), np.expand_dims(mask_obj, axis=-1)), axis=-1)
+            #
+            # pair_A_RGBD[save_cnt] = A
+            # pair_B_DM[save_cnt] = B
+
+            save_cnt += 1
+            key = cv2.waitKey(1)
+
+            if i % 100 == 0:
+                msg = view_type + " itr in total --- "
+                print(msg, (i, len_dataset))
+
+            if key == ord('q') or key == 27:
+                break
+
+    if mode == 4: # to generate bare-hand pair
         print("mode : ", mode)
         namelist_hand_color = []
         namelist_hand_depth = []
@@ -193,6 +236,99 @@ if __name__ == '__main__':
             for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('depth/*.png'):
                 namelist_hand_depth.append(filename)
 
+        len_dataset = len(namelist_hand_depth)
+
+        # main process
+        key_flag = True
+
+        save_cnt = 0
+        itr = 0
+
+        for i in range(len_dataset):
+            if i == len_dataset - 1:
+                print("done")
+
+            hand_c = np.array(Image.open(str(namelist_hand_color[i])))
+            hand_d = np.array(Image.open(str(namelist_hand_depth[i])))
+
+            if len(hand_c[0, 0, :]) == 4:
+                hand_c = hand_c[:, :, :-1]
+                hand_d = hand_d[:, :, 1]
+                hand_d[hand_d == 1] = 0
+
+            if view_type == "exo":
+                hand_d[hand_d > 600] = 0
+                hand_c[hand_d == 0, :] = [0, 0, 0]
+
+                # hand_d_vis = hand_d / np.max(hand_d)
+                # cv2.imshow("depth ", hand_d_vis)
+                # cv2.imshow("color ", hand_c)
+                # cv2.waitKey(0)
+
+                hand_d = hand_d[40:-40, 40:-40]
+                hand_c = hand_c[40:-40, 40:-40, :]
+
+            if np.max(hand_d) > 255:
+                hand_d = 255.0 * hand_d / np.max(hand_d)
+                hand_off = np.random.randint(0, 50)
+                min_d = np.min(hand_d[np.nonzero(hand_d)])
+                if min_d - hand_off < 0:
+                    hand_off += min_d - hand_off
+
+                hand_d[np.nonzero(hand_d)] -= hand_off
+
+            hand_d = cv2.resize(hand_d, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
+            hand_c = cv2.resize(hand_c, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
+
+            if np.max(hand_d) > 255 or np.min(hand_d) < 0:
+                print("min max d : ", np.min(hand_d), np.max(hand_d))
+
+
+            name_base = "../datasets/self_2020/woOBJ_init/" + view_type
+
+            name_Ac = name_base + "/A_color/" + str(save_cnt) + ".png"
+            cv2.imwrite(name_Ac, hand_c)
+            name_Ad = name_base + "/A_depth/" + str(save_cnt) + ".png"
+            cv2.imwrite(name_Ad, hand_d)
+            name_Bd = name_base + "/B_depth/" + str(save_cnt) + ".png"
+            cv2.imwrite(name_Bd, hand_d)
+
+            # A = np.concatenate((both_c, np.expand_dims(both_d, axis=-1)), axis=-1)
+            # B = np.concatenate((np.expand_dims(hand_d, axis=-1), np.expand_dims(mask_obj, axis=-1)), axis=-1)
+            #
+            # pair_A_RGBD[save_cnt] = A
+            # pair_B_DM[save_cnt] = B
+
+            save_cnt += 1
+            key = cv2.waitKey(1)
+
+            if i % 100 == 0:
+                msg = view_type + " itr in total --- for bare hand pairs"
+                print(msg, (i, len_dataset))
+
+            if key == ord('q') or key == 27:
+                break
+
+    if mode == 3:
+        print("mode : ", mode)
+        namelist_hand_color = []
+        namelist_hand_depth = []
+
+        namelist_obj_color = []
+        namelist_obj_depth = []
+
+        view_type = "ego"
+
+        if view_type == "ego":
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/ego')).rglob('c2d/*.png'):
+                namelist_hand_color.append(filename)
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/ego')).rglob('depth/*.png'):
+                namelist_hand_depth.append(filename)
+        elif view_type == "exo":
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('c2d/*.png'):
+                namelist_hand_color.append(filename)
+            for filename in Path(os.path.join('../datasets/self_2020/woOBJ/exo')).rglob('depth/*.png'):
+                namelist_hand_depth.append(filename)
 
 
         for filename in Path(os.path.join('../../Object-Renderer-pyrender/examples/images/box')).rglob('color/*.png'):
@@ -233,6 +369,9 @@ if __name__ == '__main__':
         p_tex = np.random.permutation(len_texture)
 
         for i in range(len_dataset):
+            if i % 100 == 0:
+                p_obj = np.random.permutation(len_obj)
+                p_tex = np.random.permutation(len_texture)
             if i == len_dataset - 1:
                 # print("saving...")
                 # name_1 = 'pair_A_RGBD_10k_1.npy'
@@ -260,7 +399,6 @@ if __name__ == '__main__':
                 hand_d = hand_d[:, :, 1]
                 hand_d[hand_d==1] = 0
 
-
             if view_type == "exo":
                 hand_d[hand_d>600] = 0
                 hand_c[hand_d == 0, :] = [0, 0, 0]
@@ -268,6 +406,7 @@ if __name__ == '__main__':
                 hand_d = hand_d[40:-40, 40:-40]
                 hand_c = hand_c[40:-40, 40:-40, :]
 
+            hand_d = 255.0 * hand_d / np.max(hand_d)
 
             hand_min_d = np.min(np.nonzero(hand_d))
             obj_min_d = np.min(np.nonzero(obj_d))
@@ -300,10 +439,17 @@ if __name__ == '__main__':
             #     offset = obj_mid - hand_mid
             #     obj_d[np.nonzero(obj_d)] -= offset
 
-            hand_off = int(hand_mid - 128) + np.random.randint(-10, 10)
-            obj_off = int(obj_mid - 128) + np.random.randint(-10, 10)
-            hand_d[np.nonzero(hand_d)] -= hand_off
-            obj_d[np.nonzero(obj_d)] -= obj_off
+            total_off = np.random.randint(-30, 30)
+            hand_off = int(hand_mid) - 128 + np.random.randint(-10, 10)
+            obj_off = int(obj_mid) - 128 + np.random.randint(-10, 10)
+
+            if int(hand_max_d - hand_off) > 255:
+                hand_off += int(hand_max_d - hand_off) - 255
+            if int(hand_min_d - hand_off) < 0:
+                hand_off += int(hand_min_d - hand_off)
+
+            hand_d[np.nonzero(hand_d)] -= hand_off + total_off
+            obj_d[np.nonzero(obj_d)] -= obj_off + total_off
 
             hand_d = cv2.resize(hand_d, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
             obj_d = cv2.resize(obj_d, dsize=(256, 256), interpolation=cv2.INTER_NEAREST)
@@ -357,9 +503,9 @@ if __name__ == '__main__':
             save as image
             """
             if i < train_len:
-                name_base = "../datasets/self_2020/wOBJ/train/" + view_type
+                name_base = "../datasets/self_2020/wOBJ_init/train/" + view_type
             else:
-                name_base = "../datasets/self_2020/wOBJ/test/" + view_type
+                name_base = "../datasets/self_2020/wOBJ_init/test/" + view_type
 
             name_Ac = name_base + "/A_color/" + str(save_cnt) + ".png"
             cv2.imwrite(name_Ac, both_c)

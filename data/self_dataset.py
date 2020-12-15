@@ -20,6 +20,13 @@ class SelfDataset(BaseDataset):
     def __init__(self, opt):
         """Initialize this dataset class.
 
+        training image format :
+        cv2.imshow(), imwrite() ~ BGR shows
+
+        to check color order,
+        im = im[:, :, ::-1].copy()
+        cv2.imshow("",im) need to be shown as RGB order
+
         Parameters:
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
@@ -30,18 +37,31 @@ class SelfDataset(BaseDataset):
 
         dir_self = "./datasets/self_2020/wOBJ_processed/" + str(opt.phase)
         self.files_self_A_rgbd = sorted(glob.glob(dir_self + '/A_rgbd' + '/*.*'))
-        #self.files_self_A_rgb = sorted(glob.glob(dir_self + '/A_rgb' + '/*.*'))
-
         self.files_self_B_depth = sorted(glob.glob(dir_self + '/B_d' + '/*.*'))
         self.files_self_obj_rgb = sorted(glob.glob(dir_self + '/obj_rgb' + '/*.*'))
+        tmp = int(len(self.files_self_A_rgbd) / 2)
+        self.files_self_A_rgbd = self.files_self_A_rgbd[:tmp]
+        self.files_self_B_depth = self.files_self_B_depth[:tmp]
+        self.files_self_obj_rgb = self.files_self_obj_rgb[:tmp]
+
+        dir_self = "./datasets/self_2020/woOBJ_processed/" + str(opt.phase)
+        files_wo_A_rgbd = sorted(glob.glob(dir_self + '/A_rgbd' + '/*.*'))
+        files_wo_B_depth = sorted(glob.glob(dir_self + '/B_d' + '/*.*'))
+        files_wo_obj_rgb = sorted(glob.glob(dir_self + '/obj_rgb' + '/*.*'))
+        tmp = int(len(files_wo_A_rgbd) / 2)
+        files_wo_A_rgbd = files_wo_A_rgbd[:tmp]
+        files_wo_B_depth = files_wo_B_depth[:tmp]
+        files_wo_obj_rgb = files_wo_obj_rgb[:tmp]
+
+        self.files_self_A_rgbd.extend(files_wo_A_rgbd)
+        self.files_self_B_depth.extend(files_wo_B_depth)
+        self.files_self_obj_rgb.extend(files_wo_obj_rgb)
 
         datasize = opt.max_dataset_size
         if opt.max_dataset_size is None:
             datasize = int(len(self.files_self_A_rgbd))
 
         self.files_self_A_rgbd = self.files_self_A_rgbd[:datasize]
-        #self.files_self_A_rgb = self.files_self_A_rgb[:datasize]
-        #self.files_self_A_depth = self.files_self_A_depth[:datasize]
         self.files_self_B_depth = self.files_self_B_depth[:datasize]
         self.files_self_obj_rgb = self.files_self_obj_rgb[:datasize]
 

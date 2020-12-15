@@ -2,7 +2,7 @@ import argparse
 import os
 from util import util
 import torch
-import models
+import inpaint_models as models
 import data
 
 
@@ -26,8 +26,8 @@ class BaseOptions():
         parser.add_argument('--netD', type=str, default='n_layers', help='specify discriminator architecture [basic | n_layers | pixel]. The basic model is a 70x70 PatchGAN. n_layers allows you to specify the layers in the discriminator')
         parser.add_argument('--dataset_mode', type=str, default='self', help='[inpaint | self | dexterHO]')
         parser.add_argument('--num_threads', default=4, type=int, help='# threads for loading data')
-        parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
-        parser.add_argument('--max_dataset_size', type=int, default=5000, help='Maximum number of samples allowed per dataset. If the dataset directory contains more than max_dataset_size, only a subset is loaded.')
+        parser.add_argument('--batch_size', type=int, default=2, help='input batch size')
+        parser.add_argument('--max_dataset_size', type=int, default=13820, help='Maximum number of samples allowed per dataset. If the dataset directory contains more than max_dataset_size, only a subset is loaded.')
 
         # basic parameters
         parser.add_argument('--dataroot', type=str, default='check opt.dataset_mode', help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')

@@ -1,14 +1,39 @@
-# HPE-depthinpaint
+## HPE-depthinpaint
 
-This project implemented based on the paper 'Bare-hand Depth Inpainting for 3D Tracking of Hand Interacting with Object' published in ISMAR'20.
+The test code for the paper 'Bare-hand Depth Inpainting for 3D Tracking of Hand Interacting with Object' published in ISMAR'20. 
 
-# Requirements
+## Requirements
+'''
+python==3.8.5
+torch==1.7.0
+numpy==1.19.4
+visdom==0.1.8.9
+'''
 
-# Dataset
+## Installation
+##### Clone and install requirements
+    $ git clone https://github.com/UVR-WJCHO/HPE-depthinpaint
+    $ cd HPE-depthinpaint/
+    $ pip3 install -r requirements.txt
 
-# Pretrained weights
 
-# Citations
+## Download resources
+##### Download pretrained weights
+You can download the pretrained weights in the following link:
+--
+
+##### Download DexterHO dataset
+You can download the datasets in the following link:
+--
+	
+
+## Test
+Evaluates the pretrained model on DexterHO test.
+
+    $ python test.py --weights {path_of_folder}
+
+
+## Citations
 If you think this code is useful for your research, consider citing:
 ```
 @INPROCEEDINGS{

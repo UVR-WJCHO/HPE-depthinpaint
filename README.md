@@ -20,11 +20,11 @@ visdom==0.1.8.9
 ## Download resources
 ##### Download pretrained weights
 You can download the pretrained weights in the following link:
---
+
 
 ##### Download DexterHO dataset
 You can download the datasets in the following link:
---
+
 	
 
 ## Test

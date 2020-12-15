@@ -8,7 +8,7 @@
 **/datasets/
 **/checkpoints/
 **/util/texture/
-train.py
-temp.py
-HPF_module.py
-test_wHPF.py
+*/train.py
+*/temp.py
+*/HPF_module.py
+*/test_wHPF.py
